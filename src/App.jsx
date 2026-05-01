@@ -1,121 +1,100 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useState } from "react";
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [step, setStep] = useState("start");
+  const [mood, setMood] = useState("");
+
+  const start = () => setStep("question");
+
+  const selectMood = (value) => {
+    setMood(value);
+    setStep("result");
+  };
+
+  const reset = () => {
+    setMood("");
+    setStep("start");
+  };
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
+    <div style={styles.container}>
+      {step === "start" && (
+        <>
+          <h1 style={styles.title}>🥃 Flight Deck</h1>
+          <p style={styles.text}>Build your perfect whiskey flight</p>
+          <button style={styles.button} onClick={start}>
+            Start
+          </button>
+        </>
+      )}
+
+      {step === "question" && (
+        <>
+          <h2 style={styles.title}>What’s your mood?</h2>
+
+          <button style={styles.button} onClick={() => selectMood("bold")}>
+            Bold & Smoky
+          </button>
+
+          <button style={styles.button} onClick={() => selectMood("easy")}>
+            Easy & Smooth
+          </button>
+        </>
+      )}
+
+      {step === "result" && (
+        <>
+          <h2 style={styles.title}>Your Flight</h2>
+
+          <p style={styles.text}>
+            Mood: <strong>{mood}</strong>
           </p>
-        </div>
-        <button
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
 
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
+          <ul style={styles.list}>
+            <li>🥃 Whiskey 1</li>
+            <li>🥃 Whiskey 2</li>
+            <li>🥃 Whiskey 3</li>
           </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+          <button style={styles.button} onClick={reset}>
+            Try Again
+          </button>
+        </>
+      )}
+    </div>
+  );
 }
 
-export default App
+const styles = {
+  container: {
+    padding: "20px",
+    fontFamily: "sans-serif",
+    maxWidth: "480px",
+    margin: "0 auto",
+    textAlign: "center",
+  },
+  title: {
+    marginBottom: "20px",
+  },
+  text: {
+    marginBottom: "20px",
+  },
+  button: {
+    display: "block",
+    width: "100%",
+    padding: "15px",
+    marginBottom: "10px",
+    fontSize: "16px",
+    borderRadius: "8px",
+    border: "none",
+    backgroundColor: "#333",
+    color: "white",
+  },
+  list: {
+    listStyle: "none",
+    padding: 0,
+    marginBottom: "20px",
+  },
+};
+
+export default App;
