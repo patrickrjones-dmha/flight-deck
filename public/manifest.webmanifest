@@ -1,0 +1,12 @@
+{
+  "name": "Flight Deck by Distill My Heart Adventures",
+  "short_name": "Flight Deck",
+  "description": "A whiskey flight generator from Distill My Heart Adventures.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#1a0d05",
+  "background_color": "#1a0d05",
+  "icons": []
+}
