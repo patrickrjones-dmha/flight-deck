@@ -1,38 +1,135 @@
 import { useState } from "react";
 import { whiskeys } from "./data/whiskeys/whiskeys";
 
+const vibeLabels = {
+  easy: "Easy & Smooth",
+  sweet: "Sweet & Rich",
+  bold: "Bold & Spicy",
+  smoky: "Smoky & Serious",
+};
+
+const vibeSummaryIntros = {
+  easy: "This flight keeps the runway friendly: approachable pours first, then a little more depth so the night still has some character.",
+  sweet: "This flight leans into richer dessert-like notes, then builds toward more oak, spice, or proof so it does not become a sugar parade.",
+  bold: "This flight is built to climb: spice, proof, and bigger flavors show up as you move through the pours.",
+  smoky: "This flight goes darker and more serious, with the softer pour first so the bolder bottle does not bulldoze your palate right away.",
+};
+
 function App() {
   const [step, setStep] = useState("start");
   const [choice, setChoice] = useState("");
   const [flight, setFlight] = useState([]);
+  const [wildcard, setWildcard] = useState(null);
 
   function shuffle(items) {
-    return [...items].sort(() => Math.random() - 0.5);
+    const shuffledItems = [...items];
+
+    for (let index = shuffledItems.length - 1; index > 0; index -= 1) {
+      const randomIndex = Math.floor(Math.random() * (index + 1));
+      [shuffledItems[index], shuffledItems[randomIndex]] = [
+        shuffledItems[randomIndex],
+        shuffledItems[index],
+      ];
+    }
+
+    return shuffledItems;
+  }
+
+  function proofValue(whiskey) {
+    return Number(whiskey.proof) || 0;
+  }
+
+  function uniqueByName(items) {
+    const seenNames = new Set();
+
+    return items.filter((whiskey) => {
+      const nameKey = whiskey.name.trim().toLowerCase();
+
+      if (seenNames.has(nameKey)) {
+        return false;
+      }
+
+      seenNames.add(nameKey);
+      return true;
+    });
+  }
+
+  function sortByProof(items) {
+    return [...items].sort((a, b) => proofValue(a) - proofValue(b));
+  }
+
+  function hasVibe(whiskey, selectedVibe) {
+    return whiskey.vibe.includes(selectedVibe);
   }
 
   function buildFlight(selectedVibe) {
-    const matches = whiskeys.filter((whiskey) =>
-      whiskey.vibe.includes(selectedVibe)
-    );
-
+    const matches = whiskeys.filter((whiskey) => hasVibe(whiskey, selectedVibe));
     const fallback = whiskeys.filter(
-      (whiskey) => !whiskey.vibe.includes(selectedVibe)
+      (whiskey) => !hasVibe(whiskey, selectedVibe)
     );
 
-    return [...shuffle(matches), ...shuffle(fallback)]
-      .slice(0, 3)
-      .sort((a, b) => a.proof - b.proof);
+    const selectedWhiskeys = uniqueByName([
+      ...shuffle(matches),
+      ...shuffle(fallback),
+    ]).slice(0, 3);
+
+    return sortByProof(selectedWhiskeys);
+  }
+
+  function buildWildcard(selectedVibe, selectedFlight) {
+    const flightNames = new Set(
+      selectedFlight.map((whiskey) => whiskey.name.trim().toLowerCase())
+    );
+
+    const outsideCurrentFlight = uniqueByName(whiskeys).filter(
+      (whiskey) => !flightNames.has(whiskey.name.trim().toLowerCase())
+    );
+
+    const surprisePool = outsideCurrentFlight.filter(
+      (whiskey) => !hasVibe(whiskey, selectedVibe)
+    );
+
+    return shuffle(surprisePool)[0] || shuffle(outsideCurrentFlight)[0] || null;
+  }
+
+  function buildFlightSummary(selectedVibe, selectedFlight) {
+    if (selectedFlight.length === 0) {
+      return "";
+    }
+
+    const firstPour = selectedFlight[0];
+    const finalPour = selectedFlight[selectedFlight.length - 1];
+    const intro =
+      vibeSummaryIntros[selectedVibe] ||
+      "This flight is built to move from the easiest first sip into the bigger finish.";
+
+    return `${intro} Start with ${firstPour.name} at ${firstPour.proof} proof, then work toward ${finalPour.name} at ${finalPour.proof} proof. The order matters: low proof first, biggest personality last.`;
   }
 
   function chooseVibe(vibe) {
+    const newFlight = buildFlight(vibe);
+
     setChoice(vibe);
-    setFlight(buildFlight(vibe));
+    setFlight(newFlight);
+    setWildcard(buildWildcard(vibe, newFlight));
     setStep("result");
+  }
+
+  function useWildcard() {
+    if (!wildcard) {
+      return;
+    }
+
+    const newFlight = sortByProof([...flight.slice(0, 2), wildcard]);
+
+    setFlight(newFlight);
+    setWildcard(buildWildcard(choice, newFlight));
   }
 
   function reset() {
     setChoice("");
     setFlight([]);
+    setWildcard(null);
     setStep("start");
   }
 
@@ -85,8 +182,13 @@ function App() {
 
         {step === "result" && (
           <>
-            <p style={styles.eyebrow}>Your vibe: {choice}</p>
+            <p style={styles.eyebrow}>Your vibe: {vibeLabels[choice] || choice}</p>
             <h2 style={styles.title}>Your Whiskey Flight</h2>
+
+            <section style={styles.summaryBox}>
+              <p style={styles.label}>Why this flight works</p>
+              <p style={styles.notes}>{buildFlightSummary(choice, flight)}</p>
+            </section>
 
             <div style={styles.flightList}>
               {flight.map((whiskey, index) => (
@@ -107,6 +209,24 @@ function App() {
                 </article>
               ))}
             </div>
+
+            {wildcard && (
+              <aside style={styles.wildcardCard}>
+                <p style={styles.pourNumber}>Wildcard swap</p>
+                <h3 style={styles.whiskeyName}>{wildcard.name}</h3>
+                <p style={styles.type}>
+                  {wildcard.style} · {wildcard.proof} proof
+                </p>
+                <p style={styles.notes}>
+                  Want to make the flight a little less predictable? Swap this
+                  into the lineup. It will replace one bottle and keep the final
+                  flight duplicate-free.
+                </p>
+                <button style={styles.secondaryButton} onClick={useWildcard}>
+                  Use Wildcard Swap
+                </button>
+              </aside>
+            )}
 
             <button style={styles.primaryButton} onClick={reset}>
               Build Another Flight
@@ -194,6 +314,18 @@ const styles = {
     cursor: "pointer",
     boxShadow: "0 8px 20px rgba(0, 0, 0, 0.2)",
   },
+  secondaryButton: {
+    width: "100%",
+    padding: "14px",
+    marginTop: "16px",
+    border: "1px solid rgba(255, 248, 239, 0.28)",
+    borderRadius: "16px",
+    background: "rgba(255, 248, 239, 0.14)",
+    color: "#fff8ef",
+    fontSize: "16px",
+    fontWeight: "800",
+    cursor: "pointer",
+  },
   optionButton: {
     width: "100%",
     padding: "16px",
@@ -207,6 +339,13 @@ const styles = {
     cursor: "pointer",
     textAlign: "left",
   },
+  summaryBox: {
+    padding: "16px",
+    marginBottom: "18px",
+    borderRadius: "18px",
+    background: "rgba(251, 191, 36, 0.12)",
+    border: "1px solid rgba(251, 191, 36, 0.24)",
+  },
   flightList: {
     display: "grid",
     gap: "14px",
@@ -217,6 +356,13 @@ const styles = {
     borderRadius: "18px",
     background: "rgba(0, 0, 0, 0.25)",
     border: "1px solid rgba(255, 248, 239, 0.12)",
+  },
+  wildcardCard: {
+    padding: "18px",
+    marginBottom: "20px",
+    borderRadius: "18px",
+    background: "rgba(0, 0, 0, 0.35)",
+    border: "1px solid rgba(251, 191, 36, 0.36)",
   },
   pourNumber: {
     margin: "0 0 6px",
