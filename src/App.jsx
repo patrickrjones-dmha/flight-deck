@@ -1,5 +1,10 @@
 import { useState } from "react";
 import { whiskeys } from "./data/whiskeys/whiskeys";
+import {
+  deleteSavedFlight,
+  getSavedFlights,
+  saveFlight,
+} from "./services/storageService";
 
 const vibeLabels = {
   easy: "Easy & Smooth",
@@ -20,6 +25,8 @@ function App() {
   const [choice, setChoice] = useState("");
   const [flight, setFlight] = useState([]);
   const [wildcard, setWildcard] = useState(null);
+  const [savedFlights, setSavedFlights] = useState(() => getSavedFlights());
+  const [saveMessage, setSaveMessage] = useState("");
 
   function shuffle(items) {
     const shuffledItems = [...items];
@@ -106,12 +113,43 @@ function App() {
     return `${intro} Start with ${firstPour.name} at ${firstPour.proof} proof, then work toward ${finalPour.name} at ${finalPour.proof} proof. The order matters: low proof first, biggest personality last.`;
   }
 
+  function createId() {
+    if (typeof crypto !== "undefined" && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
+  function getFlightSignature(selectedVibe, selectedFlight) {
+    const bottleSignature = selectedFlight
+      .map((whiskey) => whiskey.name.trim().toLowerCase())
+      .join("|");
+
+    return `${selectedVibe}|${bottleSignature}`;
+  }
+
+  function formatSavedDate(savedAt) {
+    try {
+      return new Intl.DateTimeFormat(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      }).format(new Date(savedAt));
+    } catch {
+      return savedAt;
+    }
+  }
+
   function chooseVibe(vibe) {
     const newFlight = buildFlight(vibe);
 
     setChoice(vibe);
     setFlight(newFlight);
     setWildcard(buildWildcard(vibe, newFlight));
+    setSaveMessage("");
     setStep("result");
   }
 
@@ -124,12 +162,71 @@ function App() {
 
     setFlight(newFlight);
     setWildcard(buildWildcard(choice, newFlight));
+    setSaveMessage("");
+  }
+
+  function handleSaveFlight() {
+    if (flight.length === 0) {
+      return;
+    }
+
+    const savedFlight = {
+      id: createId(),
+      savedAt: new Date().toISOString(),
+      name: `${vibeLabels[choice] || "Whiskey"} Flight`,
+      theme: vibeLabels[choice] || choice,
+      vibe: choice,
+      signature: getFlightSignature(choice, flight),
+      bottles: flight.map((whiskey, index) => ({
+        order: index + 1,
+        name: whiskey.name,
+        style: whiskey.style,
+        proof: whiskey.proof,
+        notes: whiskey.notes,
+        reason: whiskey.reason,
+      })),
+      explanation: buildFlightSummary(choice, flight),
+      wildcard: wildcard
+        ? {
+            name: wildcard.name,
+            style: wildcard.style,
+            proof: wildcard.proof,
+            notes: wildcard.notes,
+            reason: wildcard.reason,
+          }
+        : null,
+    };
+
+    const beforeCount = savedFlights.length;
+    const nextSavedFlights = saveFlight(savedFlight);
+
+    setSavedFlights(nextSavedFlights);
+    setSaveMessage(
+      nextSavedFlights.length === beforeCount
+        ? "This flight is already saved."
+        : "Flight saved."
+    );
+  }
+
+  function handleDeleteSavedFlight(savedFlightId) {
+    setSavedFlights(deleteSavedFlight(savedFlightId));
+  }
+
+  function goToHistory() {
+    setSaveMessage("");
+    setStep("history");
+  }
+
+  function goBackFromHistory() {
+    setSaveMessage("");
+    setStep(flight.length > 0 ? "result" : "start");
   }
 
   function reset() {
     setChoice("");
     setFlight([]);
     setWildcard(null);
+    setSaveMessage("");
     setStep("start");
   }
 
@@ -146,13 +243,17 @@ function App() {
         {step === "start" && (
           <>
             <p style={styles.eyebrow}>Welcome aboard</p>
-            <h1 style={styles.title}>🥃 Flight Deck</h1>
+            <h1 style={styles.title}>🥃 Whiskey Flight Deck</h1>
             <p style={styles.text}>
               Pick a vibe and get a simple three-whiskey tasting flight.
             </p>
 
             <button style={styles.primaryButton} onClick={() => setStep("mood")}>
               Build My Flight
+            </button>
+
+            <button style={styles.secondaryButton} onClick={goToHistory}>
+              Saved Flights ({savedFlights.length})
             </button>
           </>
         )}
@@ -228,8 +329,69 @@ function App() {
               </aside>
             )}
 
-            <button style={styles.primaryButton} onClick={reset}>
+            <button style={styles.primaryButton} onClick={handleSaveFlight}>
+              Save This Flight
+            </button>
+
+            {saveMessage && <p style={styles.statusMessage}>{saveMessage}</p>}
+
+            <button style={styles.secondaryButton} onClick={goToHistory}>
+              View Saved Flights ({savedFlights.length})
+            </button>
+
+            <button style={styles.secondaryButton} onClick={reset}>
               Build Another Flight
+            </button>
+          </>
+        )}
+
+        {step === "history" && (
+          <>
+            <p style={styles.eyebrow}>Your saved flights</p>
+            <h2 style={styles.title}>Flight History</h2>
+
+            {savedFlights.length === 0 ? (
+              <section style={styles.emptyState}>
+                <p style={styles.text}>No saved flights yet.</p>
+                <p style={styles.notes}>
+                  Build a flight, save it, and it will show up here.
+                </p>
+              </section>
+            ) : (
+              <div style={styles.flightList}>
+                {savedFlights.map((savedFlight) => (
+                  <article key={savedFlight.id} style={styles.savedFlightCard}>
+                    <p style={styles.pourNumber}>
+                      {formatSavedDate(savedFlight.savedAt)}
+                    </p>
+
+                    <h3 style={styles.whiskeyName}>{savedFlight.name}</h3>
+                    <p style={styles.type}>{savedFlight.theme}</p>
+
+                    <ol style={styles.savedBottleList}>
+                      {savedFlight.bottles.map((bottle) => (
+                        <li key={`${savedFlight.id}-${bottle.order}`}>
+                          {bottle.name} · {bottle.proof} proof
+                        </li>
+                      ))}
+                    </ol>
+
+                    <p style={styles.label}>Why it worked</p>
+                    <p style={styles.notes}>{savedFlight.explanation}</p>
+
+                    <button
+                      style={styles.dangerButton}
+                      onClick={() => handleDeleteSavedFlight(savedFlight.id)}
+                    >
+                      Delete Saved Flight
+                    </button>
+                  </article>
+                ))}
+              </div>
+            )}
+
+            <button style={styles.primaryButton} onClick={goBackFromHistory}>
+              Back
             </button>
           </>
         )}
@@ -313,16 +475,29 @@ const styles = {
     fontWeight: "800",
     cursor: "pointer",
     boxShadow: "0 8px 20px rgba(0, 0, 0, 0.2)",
+    marginTop: "12px",
   },
   secondaryButton: {
     width: "100%",
     padding: "14px",
-    marginTop: "16px",
+    marginTop: "12px",
     border: "1px solid rgba(255, 248, 239, 0.28)",
     borderRadius: "16px",
     background: "rgba(255, 248, 239, 0.14)",
     color: "#fff8ef",
     fontSize: "16px",
+    fontWeight: "800",
+    cursor: "pointer",
+  },
+  dangerButton: {
+    width: "100%",
+    padding: "12px",
+    marginTop: "16px",
+    border: "1px solid rgba(248, 113, 113, 0.36)",
+    borderRadius: "14px",
+    background: "rgba(127, 29, 29, 0.35)",
+    color: "#fecaca",
+    fontSize: "15px",
     fontWeight: "800",
     cursor: "pointer",
   },
@@ -363,6 +538,32 @@ const styles = {
     borderRadius: "18px",
     background: "rgba(0, 0, 0, 0.35)",
     border: "1px solid rgba(251, 191, 36, 0.36)",
+  },
+  savedFlightCard: {
+    padding: "18px",
+    borderRadius: "18px",
+    background: "rgba(0, 0, 0, 0.25)",
+    border: "1px solid rgba(251, 191, 36, 0.22)",
+  },
+  emptyState: {
+    padding: "22px",
+    marginBottom: "18px",
+    borderRadius: "18px",
+    background: "rgba(0, 0, 0, 0.22)",
+    border: "1px solid rgba(255, 248, 239, 0.12)",
+    textAlign: "center",
+  },
+  statusMessage: {
+    margin: "10px 0 0",
+    color: "#bbf7d0",
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  savedBottleList: {
+    margin: "8px 0 0",
+    paddingLeft: "22px",
+    color: "#fff8ef",
+    lineHeight: "1.55",
   },
   pourNumber: {
     margin: "0 0 6px",
