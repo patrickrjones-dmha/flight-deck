@@ -40,7 +40,34 @@ export function getSavedFlights() {
     []
   );
 
-  return Array.isArray(savedFlights) ? savedFlights : [];
+  if (!Array.isArray(savedFlights)) {
+    return [];
+  }
+
+  let changed = false;
+
+  const normalizedFlights = savedFlights.map((flight) => {
+    if (flight?.id) {
+      return flight;
+    }
+
+    changed = true;
+
+    return {
+      ...flight,
+      id: createId(),
+      savedAt: flight?.savedAt || new Date().toISOString(),
+    };
+  });
+
+  if (changed) {
+    localStorage.setItem(
+      STORAGE_KEYS.savedFlights,
+      JSON.stringify(normalizedFlights)
+    );
+  }
+
+  return normalizedFlights;
 }
 
 export function saveFlight(flight) {
@@ -87,8 +114,37 @@ export function saveFlight(flight) {
 }
 
 export function deleteSavedFlight(flightId) {
+  if (!flightId) {
+    return getSavedFlights();
+  }
+
   const savedFlights = getSavedFlights();
   const updatedFlights = savedFlights.filter((flight) => flight.id !== flightId);
+
+  localStorage.setItem(
+    STORAGE_KEYS.savedFlights,
+    JSON.stringify(updatedFlights)
+  );
+
+  return updatedFlights;
+}
+
+export function updateSavedFlight(flightId, updates) {
+  if (!flightId) {
+    return getSavedFlights();
+  }
+
+  const savedFlights = getSavedFlights();
+
+  const updatedFlights = savedFlights.map((flight) =>
+    flight.id === flightId
+      ? {
+          ...flight,
+          ...updates,
+          updatedAt: new Date().toISOString(),
+        }
+      : flight
+  );
 
   localStorage.setItem(
     STORAGE_KEYS.savedFlights,

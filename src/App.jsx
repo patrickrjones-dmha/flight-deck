@@ -4,6 +4,7 @@ import {
   deleteSavedFlight,
   getSavedFlights,
   saveFlight,
+  updateSavedFlight,
 } from "./services/storageService";
 
 const vibeLabels = {
@@ -227,7 +228,12 @@ function App() {
   }
 
   function handleDeleteSavedFlight(savedFlightId) {
-    const result = deleteSavedFlight(savedFlightId);
+  const result = deleteSavedFlight(savedFlightId);
+  setSavedFlights(normalizeSavedFlightsResult(result));
+}
+
+  function handleUpdateSavedFlight(savedFlightId, updates) {
+    const result = updateSavedFlight(savedFlightId, updates);
     setSavedFlights(normalizeSavedFlightsResult(result));
   }
 
@@ -397,6 +403,40 @@ function App() {
 
                     <p style={styles.label}>Why it worked</p>
                     <p style={styles.notes}>{savedFlight.explanation}</p>
+
+                    <p style={styles.label}>Your rating</p>
+                    <div style={styles.ratingButtonGroup}>
+                      {[1, 2, 3, 4, 5].map((rating) => (
+                        <button
+                          key={rating}
+                          type="button"
+                          style={{
+                            ...styles.ratingButton,
+                            ...(rating <= (savedFlight.rating || 0)
+                              ? styles.ratingButtonActive
+                              : {}),
+                          }}
+                          onClick={() =>
+                            handleUpdateSavedFlight(savedFlight.id, { rating })
+                          }
+                          aria-label={`Rate this flight ${rating} out of 5`}
+                        >
+                          ★
+                        </button>
+                      ))}
+                    </div>
+
+                    <p style={styles.label}>Tasting notes</p>
+                    <textarea
+                      style={styles.tastingNotesInput}
+                      value={savedFlight.tastingNotes || ""}
+                      onChange={(event) =>
+                        handleUpdateSavedFlight(savedFlight.id, {
+                          tastingNotes: event.target.value,
+                        })
+                      }
+                      placeholder="What did you notice? Nose, palate, finish, favorites, regrets..."
+                    />
 
                     <button
                       style={styles.dangerButton}
@@ -578,6 +618,44 @@ const styles = {
     fontWeight: "800",
     textAlign: "center",
   },
+  ratingButtonGroup: {
+  display: "flex",
+  gap: "8px",
+  marginTop: "8px",
+},
+
+ratingButton: {
+  flex: 1,
+  padding: "10px 0",
+  border: "1px solid rgba(255, 248, 239, 0.22)",
+  borderRadius: "12px",
+  background: "rgba(255, 248, 239, 0.10)",
+  color: "#fed7aa",
+  fontSize: "22px",
+  cursor: "pointer",
+},
+
+ratingButtonActive: {
+  background: "rgba(251, 191, 36, 0.26)",
+  border: "1px solid rgba(251, 191, 36, 0.54)",
+  color: "#fbbf24",
+},
+
+tastingNotesInput: {
+  width: "100%",
+  minHeight: "90px",
+  marginTop: "8px",
+  padding: "12px",
+  boxSizing: "border-box",
+  borderRadius: "14px",
+  border: "1px solid rgba(255, 248, 239, 0.22)",
+  background: "rgba(0, 0, 0, 0.28)",
+  color: "#fff8ef",
+  fontSize: "16px",
+  fontFamily: "inherit",
+  lineHeight: "1.4",
+  resize: "vertical",
+},
   savedBottleList: {
     margin: "8px 0 0",
     paddingLeft: "22px",
