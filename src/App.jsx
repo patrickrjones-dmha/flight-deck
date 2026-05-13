@@ -25,7 +25,10 @@ function App() {
   const [choice, setChoice] = useState("");
   const [flight, setFlight] = useState([]);
   const [wildcard, setWildcard] = useState(null);
-  const [savedFlights, setSavedFlights] = useState(() => getSavedFlights());
+  const [savedFlights, setSavedFlights] = useState(() => {
+    const initialSavedFlights = getSavedFlights();
+    return Array.isArray(initialSavedFlights) ? initialSavedFlights : [];
+  });
   const [saveMessage, setSaveMessage] = useState("");
 
   function shuffle(items) {
@@ -143,6 +146,19 @@ function App() {
     }
   }
 
+  function normalizeSavedFlightsResult(result) {
+    if (Array.isArray(result)) {
+      return result;
+    }
+
+    if (Array.isArray(result?.savedFlights)) {
+      return result.savedFlights;
+    }
+
+    const savedFlightsFromStorage = getSavedFlights();
+    return Array.isArray(savedFlightsFromStorage) ? savedFlightsFromStorage : [];
+  }
+
   function chooseVibe(vibe) {
     const newFlight = buildFlight(vibe);
 
@@ -198,18 +214,21 @@ function App() {
     };
 
     const beforeCount = savedFlights.length;
-    const nextSavedFlights = saveFlight(savedFlight);
+    const result = saveFlight(savedFlight);
+    const nextSavedFlights = normalizeSavedFlightsResult(result);
 
     setSavedFlights(nextSavedFlights);
     setSaveMessage(
-      nextSavedFlights.length === beforeCount
-        ? "This flight is already saved."
-        : "Flight saved."
+      result?.reason ||
+        (nextSavedFlights.length === beforeCount
+          ? "This flight is already saved."
+          : "Flight saved.")
     );
   }
 
   function handleDeleteSavedFlight(savedFlightId) {
-    setSavedFlights(deleteSavedFlight(savedFlightId));
+    const result = deleteSavedFlight(savedFlightId);
+    setSavedFlights(normalizeSavedFlightsResult(result));
   }
 
   function goToHistory() {
@@ -369,7 +388,7 @@ function App() {
                     <p style={styles.type}>{savedFlight.theme}</p>
 
                     <ol style={styles.savedBottleList}>
-                      {savedFlight.bottles.map((bottle) => (
+                      {(savedFlight.bottles || []).map((bottle) => (
                         <li key={`${savedFlight.id}-${bottle.order}`}>
                           {bottle.name} · {bottle.proof} proof
                         </li>
