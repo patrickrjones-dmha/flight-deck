@@ -40,10 +40,70 @@ function App() {
   });
   const [shelfMessage, setShelfMessage] = useState("");
   const [flightSource, setFlightSource] = useState("all");
+  const [shelfSearch, setShelfSearch] = useState("");
+  const [shelfStyleFilter, setShelfStyleFilter] = useState("all");
+  const [shelfSortMode, setShelfSortMode] = useState("onShelfFirst");
+  const [showShelfOnly, setShowShelfOnly] = useState(false);
 
-  const shelfBottles = uniqueByName(whiskeys).filter((whiskey) =>
+  const allBottles = uniqueByName(whiskeys);
+
+  const shelfBottles = allBottles.filter((whiskey) =>
     myShelf.includes(getBottleKey(whiskey))
   );
+
+  const displayedShelfBottles = allBottles
+    .filter((whiskey) => {
+      const searchText = [
+        whiskey.name,
+        whiskey.style,
+        whiskey.notes,
+        whiskey.reason,
+        ...(whiskey.vibe || []),
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      const search = shelfSearch.trim().toLowerCase();
+      const matchesSearch = !search || searchText.includes(search);
+
+      const style = whiskey.style.toLowerCase();
+      const matchesStyle =
+        shelfStyleFilter === "all" ||
+        (shelfStyleFilter === "bourbon" && style.includes("bourbon")) ||
+        (shelfStyleFilter === "rye" && style.includes("rye")) ||
+        (shelfStyleFilter === "scotch" && style.includes("scotch")) ||
+        (shelfStyleFilter === "irish" && style.includes("irish"));
+
+      const matchesShelfOnly = !showShelfOnly || isBottleOnShelf(whiskey);
+
+      return matchesSearch && matchesStyle && matchesShelfOnly;
+    })
+    .sort((a, b) => {
+      const aOnShelf = isBottleOnShelf(a);
+      const bOnShelf = isBottleOnShelf(b);
+
+      if (shelfSortMode === "onShelfFirst") {
+        if (aOnShelf !== bOnShelf) {
+          return aOnShelf ? -1 : 1;
+        }
+
+        return a.name.localeCompare(b.name);
+      }
+
+      if (shelfSortMode === "az") {
+        return a.name.localeCompare(b.name);
+      }
+
+      if (shelfSortMode === "proofLow") {
+        return proofValue(a) - proofValue(b);
+      }
+
+      if (shelfSortMode === "proofHigh") {
+        return proofValue(b) - proofValue(a);
+      }
+
+      return 0;
+    });
 
   function shuffle(items) {
     const shuffledItems = [...items];
@@ -562,11 +622,59 @@ function App() {
                     <p style={styles.label}>Shelf count</p>
                     <p style={styles.notes}>
                         {myShelf.length} bottle{myShelf.length === 1 ? "" : "s"} on your shelf.
+                        Showing {displayedShelfBottles.length} of {allBottles.length}.
                     </p>
                 </section>
 
+                <input
+                    style={styles.searchInput}
+                    value={shelfSearch}
+                    onChange={(event) => setShelfSearch(event.target.value)}
+                    placeholder="Search by name, style, notes, or vibe..."
+                />
+
+                <div style={styles.controlGrid}>
+                    <select
+                        style={styles.selectInput}
+                        value={shelfStyleFilter}
+                        onChange={(event) => setShelfStyleFilter(event.target.value)}
+                    >
+                        <option value="all">All styles</option>
+                        <option value="bourbon">Bourbon</option>
+                        <option value="rye">Rye</option>
+                        <option value="scotch">Scotch</option>
+                        <option value="irish">Irish</option>
+                    </select>
+
+                    <select
+                        style={styles.selectInput}
+                        value={shelfSortMode}
+                        onChange={(event) => setShelfSortMode(event.target.value)}
+                    >
+                        <option value="onShelfFirst">On Shelf first</option>
+                        <option value="az">A–Z</option>
+                        <option value="proofLow">Proof low to high</option>
+                        <option value="proofHigh">Proof high to low</option>
+                    </select>
+                </div>
+
+                <button
+                    style={showShelfOnly ? styles.primaryButton : styles.secondaryButton}
+                    onClick={() => setShowShelfOnly((currentValue) => !currentValue)}
+                >
+                    {showShelfOnly ? "Showing My Shelf Only" : "Show My Shelf Only"}
+                </button>
+
+                {displayedShelfBottles.length === 0 && (
+                    <section style={styles.emptyState}>
+                        <p style={styles.notes}>
+                            No bottles match that search. Try a broader search or clear the filters.
+                        </p>
+                    </section>
+                )}
+
                 <div style={styles.flightList}>
-                    {uniqueByName(whiskeys).map((whiskey) => {
+                    {displayedShelfBottles.map((whiskey) => {
                         const onShelf = isBottleOnShelf(whiskey);
 
                         return (
@@ -583,7 +691,7 @@ function App() {
                                     style={onShelf ? styles.dangerButton : styles.secondaryButton}
                                     onClick={() => handleToggleShelfBottle(whiskey)}
                                 >
-                                    {onShelf ? "Remove from My Shelf" : "Add to My Shelf"}
+                                    {onShelf ? "On Shelf ✓" : "+ Shelf"}
                                 </button>
                             </article>
                         );
@@ -801,6 +909,35 @@ tastingNotesInput: {
   lineHeight: "1.4",
   resize: "vertical",
 },
+  searchInput: {
+    width: "100%",
+    padding: "14px",
+    marginBottom: "12px",
+    boxSizing: "border-box",
+    borderRadius: "14px",
+    border: "1px solid rgba(255, 248, 239, 0.22)",
+    background: "rgba(0, 0, 0, 0.28)",
+    color: "#fff8ef",
+    fontSize: "16px",
+    fontFamily: "inherit",
+  },
+  controlGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: "10px",
+    marginBottom: "12px",
+  },
+  selectInput: {
+    width: "100%",
+    padding: "14px",
+    boxSizing: "border-box",
+    borderRadius: "14px",
+    border: "1px solid rgba(255, 248, 239, 0.22)",
+    background: "rgba(0, 0, 0, 0.28)",
+    color: "#fff8ef",
+    fontSize: "16px",
+    fontFamily: "inherit",
+  },
   savedBottleList: {
     margin: "8px 0 0",
     paddingLeft: "22px",
