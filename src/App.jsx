@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { whiskeys } from "./data/whiskeys/whiskeys";
 import {
-    deleteSavedFlight,
-    getMyShelf,
-    getSavedFlights,
-    saveFlight,
-    toggleBottleOnShelf,
-    updateSavedFlight,
+  BOTTLE_TAGS,
+  deleteSavedFlight,
+  getBottleTagsMap,
+  getMyShelf,
+  getSavedFlights,
+  saveFlight,
+  toggleBottleTag,
+  updateSavedFlight,
 } from "./services/storageService";
 
 const vibeLabels = {
@@ -40,19 +42,42 @@ function App() {
   });
   const [shelfMessage, setShelfMessage] = useState("");
   const [flightSource, setFlightSource] = useState("all");
+  const [bottleTagsMap, setBottleTagsMap] = useState(() => getBottleTagsMap());
   const [shelfSearch, setShelfSearch] = useState("");
   const [shelfStyleFilter, setShelfStyleFilter] = useState("all");
-  const [shelfSortMode, setShelfSortMode] = useState("onShelfFirst");
-  const [showShelfOnly, setShowShelfOnly] = useState(false);
+  const [bottleListFilter, setBottleListFilter] = useState("all");
+  const [shelfSortMode, setShelfSortMode] = useState("taggedFirst");
 
   const allBottles = uniqueByName(whiskeys);
 
   const shelfBottles = allBottles.filter((whiskey) =>
-    myShelf.includes(getBottleKey(whiskey))
+    isBottleTagged(whiskey, BOTTLE_TAGS.shelf)
   );
+
+  const bottleTagCounts = {
+    shelf: allBottles.filter((whiskey) =>
+      isBottleTagged(whiskey, BOTTLE_TAGS.shelf)
+    ).length,
+    want: allBottles.filter((whiskey) =>
+      isBottleTagged(whiskey, BOTTLE_TAGS.want)
+    ).length,
+    favorite: allBottles.filter((whiskey) =>
+      isBottleTagged(whiskey, BOTTLE_TAGS.favorite)
+    ).length,
+    revisit: allBottles.filter((whiskey) =>
+      isBottleTagged(whiskey, BOTTLE_TAGS.revisit)
+    ).length,
+    avoid: allBottles.filter((whiskey) =>
+      isBottleTagged(whiskey, BOTTLE_TAGS.avoid)
+    ).length,
+    finished: allBottles.filter((whiskey) =>
+      isBottleTagged(whiskey, BOTTLE_TAGS.finished)
+    ).length,
+  };
 
   const displayedShelfBottles = allBottles
     .filter((whiskey) => {
+      const tags = getBottleTagsFromMap(whiskey);
       const searchText = [
         whiskey.name,
         whiskey.style,
@@ -63,8 +88,15 @@ function App() {
         .join(" ")
         .toLowerCase();
 
-      const search = shelfSearch.trim().toLowerCase();
-      const matchesSearch = !search || searchText.includes(search);
+  const searchTerms = shelfSearch
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  const matchesSearch =
+    searchTerms.length === 0 ||
+    searchTerms.every((term) => searchText.includes(term));
 
       const style = whiskey.style.toLowerCase();
       const matchesStyle =
@@ -74,17 +106,18 @@ function App() {
         (shelfStyleFilter === "scotch" && style.includes("scotch")) ||
         (shelfStyleFilter === "irish" && style.includes("irish"));
 
-      const matchesShelfOnly = !showShelfOnly || isBottleOnShelf(whiskey);
+      const matchesListFilter =
+        bottleListFilter === "all" || Boolean(tags[bottleListFilter]);
 
-      return matchesSearch && matchesStyle && matchesShelfOnly;
+      return matchesSearch && matchesStyle && matchesListFilter;
     })
     .sort((a, b) => {
-      const aOnShelf = isBottleOnShelf(a);
-      const bOnShelf = isBottleOnShelf(b);
+      if (shelfSortMode === "taggedFirst") {
+        const aRank = getBottleTagSortRank(a);
+        const bRank = getBottleTagSortRank(b);
 
-      if (shelfSortMode === "onShelfFirst") {
-        if (aOnShelf !== bOnShelf) {
-          return aOnShelf ? -1 : 1;
+        if (aRank !== bRank) {
+          return aRank - bRank;
         }
 
         return a.name.localeCompare(b.name);
@@ -123,8 +156,97 @@ function App() {
         return (bottle?.name || bottle?.whiskeyName || "").trim().toLowerCase();
     }
 
+    function getBottleTagsFromMap(bottle) {
+        const bottleKey = getBottleKey(bottle);
+
+        return {
+            shelf: false,
+            want: false,
+            favorite: false,
+            revisit: false,
+            avoid: false,
+            finished: false,
+            ...(bottleTagsMap[bottleKey] || {}),
+        };
+    }
+
+    function isBottleTagged(bottle, tagName) {
+        return Boolean(getBottleTagsFromMap(bottle)[tagName]);
+    }
+
     function isBottleOnShelf(bottle) {
-        return myShelf.includes(getBottleKey(bottle));
+        return isBottleTagged(bottle, BOTTLE_TAGS.shelf);
+    }
+
+    function hasAnyBottleTag(bottle) {
+        const tags = getBottleTagsFromMap(bottle);
+
+        return (
+            tags.shelf ||
+            tags.want ||
+            tags.favorite ||
+            tags.revisit ||
+            tags.avoid ||
+            tags.finished
+        );
+    }
+
+    function getBottleTagSortRank(bottle) {
+        const tags = getBottleTagsFromMap(bottle);
+
+        if (tags.shelf) return 0;
+        if (tags.want) return 1;
+        if (tags.favorite) return 2;
+        if (tags.revisit) return 3;
+        if (tags.avoid) return 4;
+        if (tags.finished) return 5;
+
+        return 99;
+    }
+
+    function getBottleTagButtonText(bottle, tagName) {
+        const tags = getBottleTagsFromMap(bottle);
+
+        const labels = {
+            [BOTTLE_TAGS.shelf]: tags.shelf ? "Shelf ✓" : "+ Shelf",
+            [BOTTLE_TAGS.want]: tags.want ? "Wanted ✓" : "+ Want",
+            [BOTTLE_TAGS.favorite]: tags.favorite ? "Favorite ★" : "★ Favorite",
+            [BOTTLE_TAGS.revisit]: tags.revisit ? "Revisit ✓" : "↻ Revisit",
+            [BOTTLE_TAGS.avoid]: tags.avoid ? "Avoid ✓" : "Avoid",
+            [BOTTLE_TAGS.finished]: tags.finished ? "Finished ✓" : "Finished",
+        };
+
+        return labels[tagName] || tagName;
+    }
+
+    function renderBottleTagButtons(whiskey) {
+        const tagNames = [
+            BOTTLE_TAGS.shelf,
+            BOTTLE_TAGS.want,
+            BOTTLE_TAGS.favorite,
+            BOTTLE_TAGS.revisit,
+            BOTTLE_TAGS.avoid,
+            BOTTLE_TAGS.finished,
+        ];
+
+        return (
+            <div style={styles.tagButtonGrid}>
+                {tagNames.map((tagName) => {
+                    const isActive = isBottleTagged(whiskey, tagName);
+
+                    return (
+                        <button
+                            key={`${whiskey.name}-${tagName}`}
+                            type="button"
+                            style={isActive ? styles.activeTagButton : styles.tagButton}
+                            onClick={() => handleToggleBottleTag(whiskey, tagName)}
+                        >
+                            {getBottleTagButtonText(whiskey, tagName)}
+                        </button>
+                    );
+                })}
+            </div>
+        );
     }
 
 
@@ -246,7 +368,9 @@ function App() {
 
     function chooseVibe(vibe, options = {}) {
         const useShelf = options.useShelf === true;
-        const sourceWhiskeys = useShelf ? shelfBottles : whiskeys;
+        const sourceWhiskeys = (useShelf ? shelfBottles : whiskeys).filter(
+            (whiskey) => !isBottleTagged(whiskey, BOTTLE_TAGS.avoid)
+        );
 
         if (sourceWhiskeys.length < 3) {
             setShelfMessage("Add at least 3 bottles to My Shelf before building a shelf flight.");
@@ -270,7 +394,9 @@ function App() {
         }
 
         const newFlight = sortByProof([...flight.slice(0, 2), wildcard]);
-        const sourceWhiskeys = flightSource === "shelf" ? shelfBottles : whiskeys;
+        const sourceWhiskeys = (flightSource === "shelf" ? shelfBottles : whiskeys).filter(
+            (whiskey) => !isBottleTagged(whiskey, BOTTLE_TAGS.avoid)
+        );
 
         setFlight(newFlight);
         setWildcard(buildWildcard(choice, newFlight, sourceWhiskeys));
@@ -332,18 +458,35 @@ function App() {
     setSavedFlights(normalizeSavedFlightsResult(result));
     }
 
-    function handleToggleShelfBottle(whiskey) {
-        const result = toggleBottleOnShelf(whiskey);
-        setMyShelf(result.myShelf);
+    function handleToggleBottleTag(whiskey, tagName) {
+        const result = toggleBottleTag(whiskey, tagName);
+
+        setBottleTagsMap({ ...result.bottleTagsMap });
+        setMyShelf(getMyShelf());
+
+        const actionLabel = {
+            [BOTTLE_TAGS.shelf]: "My Shelf",
+            [BOTTLE_TAGS.want]: "Shopping List",
+            [BOTTLE_TAGS.favorite]: "Favorites",
+            [BOTTLE_TAGS.revisit]: "Revisit List",
+            [BOTTLE_TAGS.avoid]: "Avoid List",
+            [BOTTLE_TAGS.finished]: "Finished Bottles",
+        }[tagName];
+
         setShelfMessage(
-            result.isOnShelf
-                ? `${whiskey.name} added to My Shelf.`
-                : `${whiskey.name} removed from My Shelf.`
+            result.isTagged
+                ? `${whiskey.name} added to ${actionLabel}.`
+                : `${whiskey.name} removed from ${actionLabel}.`
         );
+    }
+
+    function handleToggleShelfBottle(whiskey) {
+        handleToggleBottleTag(whiskey, BOTTLE_TAGS.shelf);
     }
 
     function goToShelf() {
         setShelfMessage("");
+        setShelfSearch("");
         setStep("shelf");
     }
 
@@ -389,7 +532,7 @@ function App() {
             </button>
 
            <button style={styles.secondaryButton} onClick={goToShelf}>
-             My Shelf ({myShelf.length})
+             Bottle Lists ({bottleTagCounts.shelf} owned · {bottleTagCounts.want} wanted)
            </button>
 
             <button style={styles.secondaryButton} onClick={goToHistory}>
@@ -484,6 +627,8 @@ function App() {
 
                   <p style={styles.label}>Why it fits</p>
                   <p style={styles.notes}>{whiskey.reason}</p>
+
+                  {renderBottleTagButtons(whiskey)}
                 </article>
               ))}
             </div>
@@ -610,18 +755,24 @@ function App() {
         {step === "shelf" && (
             <>
                 <p style={styles.eyebrow}>Your bottles</p>
-                <h2 style={styles.title}>My Shelf</h2>
+                <h2 style={styles.title}>Bottle Lists</h2>
 
                 <p style={styles.text}>
-                    Add bottles you own, then build flights from your actual shelf.
+                    Track what you own, want, love, want to revisit, want to avoid,
+                    and bottles you finished.
                 </p>
 
                 {shelfMessage && <p style={styles.statusMessage}>{shelfMessage}</p>}
 
                 <section style={styles.summaryBox}>
-                    <p style={styles.label}>Shelf count</p>
+                    <p style={styles.label}>Counts</p>
                     <p style={styles.notes}>
-                        {myShelf.length} bottle{myShelf.length === 1 ? "" : "s"} on your shelf.
+                        Shelf: {bottleTagCounts.shelf} · Want: {bottleTagCounts.want} ·
+                        Favorites: {bottleTagCounts.favorite} · Revisit:{" "}
+                        {bottleTagCounts.revisit} · Avoid: {bottleTagCounts.avoid} ·
+                        Finished: {bottleTagCounts.finished}
+                    </p>
+                    <p style={styles.notes}>
                         Showing {displayedShelfBottles.length} of {allBottles.length}.
                     </p>
                 </section>
@@ -634,6 +785,20 @@ function App() {
                 />
 
                 <div style={styles.controlGrid}>
+                    <select
+                        style={styles.selectInput}
+                        value={bottleListFilter}
+                        onChange={(event) => setBottleListFilter(event.target.value)}
+                    >
+                        <option value="all">All bottles</option>
+                        <option value={BOTTLE_TAGS.shelf}>My Shelf</option>
+                        <option value={BOTTLE_TAGS.want}>Shopping List</option>
+                        <option value={BOTTLE_TAGS.favorite}>Favorites</option>
+                        <option value={BOTTLE_TAGS.revisit}>Revisit</option>
+                        <option value={BOTTLE_TAGS.avoid}>Avoid</option>
+                        <option value={BOTTLE_TAGS.finished}>Finished</option>
+                    </select>
+
                     <select
                         style={styles.selectInput}
                         value={shelfStyleFilter}
@@ -651,19 +816,85 @@ function App() {
                         value={shelfSortMode}
                         onChange={(event) => setShelfSortMode(event.target.value)}
                     >
-                        <option value="onShelfFirst">On Shelf first</option>
+                        <option value="taggedFirst">Tagged first</option>
                         <option value="az">A–Z</option>
                         <option value="proofLow">Proof low to high</option>
                         <option value="proofHigh">Proof high to low</option>
                     </select>
                 </div>
 
-                <button
-                    style={showShelfOnly ? styles.primaryButton : styles.secondaryButton}
-                    onClick={() => setShowShelfOnly((currentValue) => !currentValue)}
-                >
-                    {showShelfOnly ? "Showing My Shelf Only" : "Show My Shelf Only"}
-                </button>
+                <div style={styles.quickFilterGrid}>
+                    <button
+                        style={
+                            bottleListFilter === "all"
+                                ? styles.activeTagButton
+                                : styles.tagButton
+                        }
+                        onClick={() => setBottleListFilter("all")}
+                    >
+                        All
+                    </button>
+                    <button
+                        style={
+                            bottleListFilter === BOTTLE_TAGS.shelf
+                                ? styles.activeTagButton
+                                : styles.tagButton
+                        }
+                        onClick={() => setBottleListFilter(BOTTLE_TAGS.shelf)}
+                    >
+                        Shelf
+                    </button>
+                    <button
+                        style={
+                            bottleListFilter === BOTTLE_TAGS.want
+                                ? styles.activeTagButton
+                                : styles.tagButton
+                        }
+                        onClick={() => setBottleListFilter(BOTTLE_TAGS.want)}
+                    >
+                        Want
+                    </button>
+                    <button
+                        style={
+                            bottleListFilter === BOTTLE_TAGS.favorite
+                                ? styles.activeTagButton
+                                : styles.tagButton
+                        }
+                        onClick={() => setBottleListFilter(BOTTLE_TAGS.favorite)}
+                    >
+                        Favorites
+                    </button>
+                    <button
+                        style={
+                            bottleListFilter === BOTTLE_TAGS.revisit
+                                ? styles.activeTagButton
+                                : styles.tagButton
+                        }
+                        onClick={() => setBottleListFilter(BOTTLE_TAGS.revisit)}
+                    >
+                        Revisit
+                    </button>
+                    <button
+                        style={
+                            bottleListFilter === BOTTLE_TAGS.avoid
+                                ? styles.activeTagButton
+                                : styles.tagButton
+                        }
+                        onClick={() => setBottleListFilter(BOTTLE_TAGS.avoid)}
+                    >
+                        Avoid
+                    </button>
+                    <button
+                        style={
+                            bottleListFilter === BOTTLE_TAGS.finished
+                                ? styles.activeTagButton
+                                : styles.tagButton
+                        }
+                        onClick={() => setBottleListFilter(BOTTLE_TAGS.finished)}
+                    >
+                        Finished
+                    </button>
+                </div>
 
                 {displayedShelfBottles.length === 0 && (
                     <section style={styles.emptyState}>
@@ -675,7 +906,7 @@ function App() {
 
                 <div style={styles.flightList}>
                     {displayedShelfBottles.map((whiskey) => {
-                        const onShelf = isBottleOnShelf(whiskey);
+                        const tags = getBottleTagsFromMap(whiskey);
 
                         return (
                             <article key={whiskey.name} style={styles.whiskeyCard}>
@@ -687,12 +918,18 @@ function App() {
 
                                 <p style={styles.notes}>{whiskey.notes}</p>
 
-                                <button
-                                    style={onShelf ? styles.dangerButton : styles.secondaryButton}
-                                    onClick={() => handleToggleShelfBottle(whiskey)}
-                                >
-                                    {onShelf ? "On Shelf ✓" : "+ Shelf"}
-                                </button>
+                                {hasAnyBottleTag(whiskey) && (
+                                    <p style={styles.tagSummary}>
+                                        {tags.shelf ? "Shelf" : ""}
+                                        {tags.want ? " · Want" : ""}
+                                        {tags.favorite ? " · Favorite" : ""}
+                                        {tags.revisit ? " · Revisit" : ""}
+                                        {tags.avoid ? " · Avoid" : ""}
+                                        {tags.finished ? " · Finished" : ""}
+                                    </p>
+                                )}
+
+                                {renderBottleTagButtons(whiskey)}
                             </article>
                         );
                     })}
@@ -937,6 +1174,45 @@ tastingNotesInput: {
     color: "#fff8ef",
     fontSize: "16px",
     fontFamily: "inherit",
+  },
+  quickFilterGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "8px",
+    marginBottom: "16px",
+  },
+  tagButtonGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "8px",
+    marginTop: "14px",
+  },
+  tagButton: {
+    padding: "10px",
+    border: "1px solid rgba(255, 248, 239, 0.22)",
+    borderRadius: "12px",
+    background: "rgba(255, 248, 239, 0.10)",
+    color: "#fff8ef",
+    fontSize: "13px",
+    fontWeight: "800",
+    cursor: "pointer",
+  },
+  activeTagButton: {
+    padding: "10px",
+    border: "1px solid rgba(251, 191, 36, 0.54)",
+    borderRadius: "12px",
+    background: "rgba(251, 191, 36, 0.24)",
+    color: "#fef3c7",
+    fontSize: "13px",
+    fontWeight: "900",
+    cursor: "pointer",
+  },
+  tagSummary: {
+    margin: "12px 0 0",
+    color: "#bbf7d0",
+    fontSize: "13px",
+    fontWeight: "800",
+    lineHeight: "1.45",
   },
   savedBottleList: {
     margin: "8px 0 0",
