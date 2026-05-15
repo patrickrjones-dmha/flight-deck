@@ -1,6 +1,5 @@
 const STORAGE_KEYS = {
-    savedFlights: "wfd.savedFlights.v1",
-    myShelf: "wfd.myShelf.v1",
+  savedFlights: "wfd.savedFlights.v1",
 };
 
 function safeParseJson(value, fallback) {
@@ -153,80 +152,6 @@ export function updateSavedFlight(flightId, updates) {
   );
 
   return updatedFlights;
-}
-
-export function getMyShelf() {
-    const myShelf = safeParseJson(localStorage.getItem(STORAGE_KEYS.myShelf), []);
-
-    if (!Array.isArray(myShelf)) {
-        return [];
-    }
-
-    return myShelf.filter(Boolean);
-}
-
-export function isBottleOnShelf(bottle) {
-    const bottleName = normalizeBottleName(bottle);
-
-    if (!bottleName) {
-        return false;
-    }
-
-    return getMyShelf().includes(bottleName);
-}
-
-export function addBottleToShelf(bottle) {
-    const bottleName = normalizeBottleName(bottle);
-
-    if (!bottleName) {
-        return getMyShelf();
-    }
-
-    const myShelf = getMyShelf();
-
-    if (myShelf.includes(bottleName)) {
-        return myShelf;
-    }
-
-    const updatedShelf = [bottleName, ...myShelf];
-
-    localStorage.setItem(STORAGE_KEYS.myShelf, JSON.stringify(updatedShelf));
-
-    return updatedShelf;
-}
-
-export function removeBottleFromShelf(bottle) {
-    const bottleName = normalizeBottleName(bottle);
-
-    if (!bottleName) {
-        return getMyShelf();
-    }
-
-    const updatedShelf = getMyShelf().filter(
-        (shelfBottleName) => shelfBottleName !== bottleName
-    );
-
-    localStorage.setItem(STORAGE_KEYS.myShelf, JSON.stringify(updatedShelf));
-
-    return updatedShelf;
-}
-
-export function toggleBottleOnShelf(bottle) {
-    if (isBottleOnShelf(bottle)) {
-        return {
-            isOnShelf: false,
-            myShelf: removeBottleFromShelf(bottle),
-        };
-    }
-
-    return {
-        isOnShelf: true,
-        myShelf: addBottleToShelf(bottle),
-    };
-}
-
-export function clearMyShelf() {
-    localStorage.removeItem(STORAGE_KEYS.myShelf);
 }
 
 export function clearSavedFlights() {

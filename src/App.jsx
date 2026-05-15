@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { whiskeys } from "./data/whiskeys/whiskeys";
 import {
-  deleteSavedFlight,
-  getSavedFlights,
-  saveFlight,
-  updateSavedFlight,
+    deleteSavedFlight,
+    getMyShelf,
+    getSavedFlights,
+    saveFlight,
+    toggleBottleOnShelf,
+    updateSavedFlight,
 } from "./services/storageService";
 
 const vibeLabels = {
@@ -32,6 +34,17 @@ function App() {
   });
   const [saveMessage, setSaveMessage] = useState("");
 
+  const [myShelf, setMyShelf] = useState(() => {
+    const initialShelf = getMyShelf();
+    return Array.isArray(initialShelf) ? initialShelf : [];
+  });
+  const [shelfMessage, setShelfMessage] = useState("");
+  const [flightSource, setFlightSource] = useState("all");
+
+  const shelfBottles = uniqueByName(whiskeys).filter((whiskey) =>
+    myShelf.includes(getBottleKey(whiskey))
+  );
+
   function shuffle(items) {
     const shuffledItems = [...items];
 
@@ -44,7 +57,16 @@ function App() {
     }
 
     return shuffledItems;
-  }
+    }
+
+    function getBottleKey(bottle) {
+        return (bottle?.name || bottle?.whiskeyName || "").trim().toLowerCase();
+    }
+
+    function isBottleOnShelf(bottle) {
+        return myShelf.includes(getBottleKey(bottle));
+    }
+
 
   function proofValue(whiskey) {
     return Number(whiskey.proof) || 0;
@@ -73,26 +95,28 @@ function App() {
     return whiskey.vibe.includes(selectedVibe);
   }
 
-  function buildFlight(selectedVibe) {
-    const matches = whiskeys.filter((whiskey) => hasVibe(whiskey, selectedVibe));
-    const fallback = whiskeys.filter(
-      (whiskey) => !hasVibe(whiskey, selectedVibe)
-    );
+    function buildFlight(selectedVibe, sourceWhiskeys = whiskeys) {
+        const matches = sourceWhiskeys.filter((whiskey) =>
+            hasVibe(whiskey, selectedVibe)
+        );
+        const fallback = sourceWhiskeys.filter(
+            (whiskey) => !hasVibe(whiskey, selectedVibe)
+        );
 
-    const selectedWhiskeys = uniqueByName([
-      ...shuffle(matches),
-      ...shuffle(fallback),
-    ]).slice(0, 3);
+        const selectedWhiskeys = uniqueByName([
+            ...shuffle(matches),
+            ...shuffle(fallback),
+        ]).slice(0, 3);
 
-    return sortByProof(selectedWhiskeys);
-  }
+        return sortByProof(selectedWhiskeys);
+    }
 
-  function buildWildcard(selectedVibe, selectedFlight) {
+  function buildWildcard(selectedVibe, selectedFlight, sourceWhiskeys = whiskeys) {
     const flightNames = new Set(
       selectedFlight.map((whiskey) => whiskey.name.trim().toLowerCase())
     );
 
-    const outsideCurrentFlight = uniqueByName(whiskeys).filter(
+      const outsideCurrentFlight = uniqueByName(sourceWhiskeys).filter(
       (whiskey) => !flightNames.has(whiskey.name.trim().toLowerCase())
     );
 
@@ -160,27 +184,38 @@ function App() {
     return Array.isArray(savedFlightsFromStorage) ? savedFlightsFromStorage : [];
   }
 
-  function chooseVibe(vibe) {
-    const newFlight = buildFlight(vibe);
+    function chooseVibe(vibe, options = {}) {
+        const useShelf = options.useShelf === true;
+        const sourceWhiskeys = useShelf ? shelfBottles : whiskeys;
 
-    setChoice(vibe);
-    setFlight(newFlight);
-    setWildcard(buildWildcard(vibe, newFlight));
-    setSaveMessage("");
-    setStep("result");
-  }
+        if (sourceWhiskeys.length < 3) {
+            setShelfMessage("Add at least 3 bottles to My Shelf before building a shelf flight.");
+            return;
+        }
 
-  function useWildcard() {
-    if (!wildcard) {
-      return;
+        const newFlight = buildFlight(vibe, sourceWhiskeys);
+
+        setChoice(vibe);
+        setFlight(newFlight);
+        setFlightSource(useShelf ? "shelf" : "all");
+        setWildcard(buildWildcard(vibe, newFlight, sourceWhiskeys));
+        setSaveMessage("");
+        setShelfMessage("");
+        setStep("result");
     }
 
-    const newFlight = sortByProof([...flight.slice(0, 2), wildcard]);
+    function useWildcard() {
+        if (!wildcard) {
+            return;
+        }
 
-    setFlight(newFlight);
-    setWildcard(buildWildcard(choice, newFlight));
-    setSaveMessage("");
-  }
+        const newFlight = sortByProof([...flight.slice(0, 2), wildcard]);
+        const sourceWhiskeys = flightSource === "shelf" ? shelfBottles : whiskeys;
+
+        setFlight(newFlight);
+        setWildcard(buildWildcard(choice, newFlight, sourceWhiskeys));
+        setSaveMessage("");
+    }
 
   function handleSaveFlight() {
     if (flight.length === 0) {
@@ -235,7 +270,22 @@ function App() {
   function handleUpdateSavedFlight(savedFlightId, updates) {
     const result = updateSavedFlight(savedFlightId, updates);
     setSavedFlights(normalizeSavedFlightsResult(result));
-  }
+    }
+
+    function handleToggleShelfBottle(whiskey) {
+        const result = toggleBottleOnShelf(whiskey);
+        setMyShelf(result.myShelf);
+        setShelfMessage(
+            result.isOnShelf
+                ? `${whiskey.name} added to My Shelf.`
+                : `${whiskey.name} removed from My Shelf.`
+        );
+    }
+
+    function goToShelf() {
+        setShelfMessage("");
+        setStep("shelf");
+    }
 
   function goToHistory() {
     setSaveMessage("");
@@ -252,6 +302,7 @@ function App() {
     setFlight([]);
     setWildcard(null);
     setSaveMessage("");
+    setFlightSource("all");
     setStep("start");
   }
 
@@ -276,6 +327,10 @@ function App() {
             <button style={styles.primaryButton} onClick={() => setStep("mood")}>
               Build My Flight
             </button>
+
+           <button style={styles.secondaryButton} onClick={goToShelf}>
+             My Shelf ({myShelf.length})
+           </button>
 
             <button style={styles.secondaryButton} onClick={goToHistory}>
               Saved Flights ({savedFlights.length})
@@ -303,6 +358,43 @@ function App() {
             <button style={styles.optionButton} onClick={() => chooseVibe("smoky")}>
               Smoky & Serious
             </button>
+
+            {myShelf.length >= 3 && (
+                <>
+                    <p style={styles.label}>Build from My Shelf</p>
+
+                    <button
+                        style={styles.optionButton}
+                        onClick={() => chooseVibe("easy", { useShelf: true })}
+                    >
+                        My Shelf: Easy & Smooth
+                    </button>
+
+                    <button
+                        style={styles.optionButton}
+                        onClick={() => chooseVibe("sweet", { useShelf: true })}
+                    >
+                        My Shelf: Sweet & Rich
+                    </button>
+
+                    <button
+                        style={styles.optionButton}
+                        onClick={() => chooseVibe("bold", { useShelf: true })}
+                    >
+                        My Shelf: Bold & Spicy
+                    </button>
+
+                    <button
+                        style={styles.optionButton}
+                        onClick={() => chooseVibe("smoky", { useShelf: true })}
+                    >
+                        My Shelf: Smoky & Serious
+                    </button>
+                </>
+            )}
+
+            {shelfMessage && <p style={styles.statusMessage}>{shelfMessage}</p>}
+
           </>
         )}
 
@@ -453,6 +545,59 @@ function App() {
               Back
             </button>
           </>
+              )}
+
+        {step === "shelf" && (
+            <>
+                <p style={styles.eyebrow}>Your bottles</p>
+                <h2 style={styles.title}>My Shelf</h2>
+
+                <p style={styles.text}>
+                    Add bottles you own, then build flights from your actual shelf.
+                </p>
+
+                {shelfMessage && <p style={styles.statusMessage}>{shelfMessage}</p>}
+
+                <section style={styles.summaryBox}>
+                    <p style={styles.label}>Shelf count</p>
+                    <p style={styles.notes}>
+                        {myShelf.length} bottle{myShelf.length === 1 ? "" : "s"} on your shelf.
+                    </p>
+                </section>
+
+                <div style={styles.flightList}>
+                    {uniqueByName(whiskeys).map((whiskey) => {
+                        const onShelf = isBottleOnShelf(whiskey);
+
+                        return (
+                            <article key={whiskey.name} style={styles.whiskeyCard}>
+                                <h3 style={styles.whiskeyName}>{whiskey.name}</h3>
+
+                                <p style={styles.type}>
+                                    {whiskey.style} · {whiskey.proof} proof
+                                </p>
+
+                                <p style={styles.notes}>{whiskey.notes}</p>
+
+                                <button
+                                    style={onShelf ? styles.dangerButton : styles.secondaryButton}
+                                    onClick={() => handleToggleShelfBottle(whiskey)}
+                                >
+                                    {onShelf ? "Remove from My Shelf" : "Add to My Shelf"}
+                                </button>
+                            </article>
+                        );
+                    })}
+                </div>
+
+                <button style={styles.primaryButton} onClick={() => setStep("mood")}>
+                    Build a Flight
+                </button>
+
+                <button style={styles.secondaryButton} onClick={() => setStep("start")}>
+                    Back Home
+                </button>
+            </>
         )}
       </section>
     </main>
